@@ -15,9 +15,6 @@ metadata_file=`realpath $2`
 # Third argument -- output directory
 outdir=`realpath $3`
 
-# Go to inpur dir -- we will just work there
-cd "${input_dir}"
-
 # Check if all read file pairs are complete
 echo -n "Primary validation..."
 for f in ${input_dir}/*_R1*.fastq*; do # check forward-to-reverse mapping
@@ -28,7 +25,7 @@ for f in ${input_dir}/*_R1*.fastq*; do # check forward-to-reverse mapping
   fi
 done
 for r in ${input_dir}/*_R2*.fastq*; do # check reverse-to-forward mapping
-  f="${f/_R2/_R1}"
+  f="${r/_R2/_R1}"
   if [[ ! -f "${f}" ]]; then
     echo -e "\nError: no forward (R1) file found for reverse (R2) file \`${r}\`."
     exit 1
@@ -36,14 +33,18 @@ for r in ${input_dir}/*_R2*.fastq*; do # check reverse-to-forward mapping
 done
 echo "ok"
 
-
 # Define some variables
 global_preprocess_outdir="${outdir}/without_primers"
 global_preprocess_log="${global_preprocess_outdir}/preprocess16S_global.log"
-curr_preprocess_outdir=`realpath ./curr_outdir`
+curr_preprocess_outdir="${input_dir}/curr_outdir"
 curr_preprocess_log="${curr_preprocess_outdir}/preprocess16S.log"
-preprocess16S="/home/justme/soft/preprocess16S/preprocess16S.py"
-my_R_script="/home/justme/Metagenomics/scripts/src/filter-merge-classify.R"
+
+# Get and check "filter_merge_classify" script
+filter_merge_classify=`realpath ./src/filter-merge-classify.R`
+if [[ ! -f "${filter_merge_classify}" ]]; then
+  echo -e "\aError: file \`filter-merge-classify.R\` does not exist at \`${filter_merge_classify}\`!"
+  exit 1
+fi
 
 
 # Run preprocess16S over all pairs of reads
@@ -54,11 +55,11 @@ for f in ${input_dir}/*_R1*.fastq*; do
   r="${f/_R1/_R2}"
 
   # Run preprocess16S
-  "${preprocess16S}" -1 "${f}" -2 "${r}" -x 0.7 -o "${curr_preprocess_outdir}"
+  "${PREPROCESS16S}" -1 "${f}" -2 "${r}" -x 0.7 -o "${curr_preprocess_outdir}"
 
   # If eror occured -- exit
   if [[ $? != 0 ]]; then
-    echo "Error in preprocess16S. Exiting now. Please, contact Maxim: it is his fault and shame :("
+    echo "Error in preprocess16S. Exiting now."
     exit 1
   fi
 
@@ -82,9 +83,9 @@ done
 # Run preprocessing R script: filter, calculate error models, merge, remove chimeras, classify and create phyloseq object
 echo -e "\nStarting R preprocessing script. It will filter reads, merge and classify them."
 echo -e "What is important, it will create phyloseq object (\`phyloseq_object.rds\`), which you need to import to GenePiper for further analyses.\n"
-Rscript --vanilla "${my_R_script}" "${global_preprocess_outdir}" "${metadata_file}"
+Rscript --vanilla "${filter_merge_classify}" "${global_preprocess_outdir}" "${metadata_file}"
 if [[ $? != 0 ]]; then
-  echo "R preprocessing script failed! Exitting now. Please, contact Maxim: it is his fault and shame :("
+  echo "R preprocessing script failed! Exitting now."
   exit 1
 fi
 

@@ -4,10 +4,8 @@
 # Usage:
 #   ./preprocessing-pipeline.sh INPUT_DIR METADATA_FILE
 
-runner=`realpath ./src/preprocessing-runner.sh`
-
 # First argument -- input directory. Verify it.
-input_dir=`realpath $1`
+input_dir=$1
 if [[ -z "${input_dir}" ]]; then
   echo -e "\aError: you must specify input directory as first argument."
   exit 1
@@ -16,9 +14,10 @@ if [[ ! -d "${input_dir}" ]]; then
   echo -e "\aError: input directory \`${input_dir}\` does not exist!"
   exit 1
 fi
+input_dir=`realpath "${input_dir}"`
 
 # Second argument -- metadata file. Verify it.
-metadata_file=`realpath $2`
+metadata_file=$2
 if [[ -z "${metadata_file}" ]]; then
   echo -e "\aError: you must specify metadata file as second argument."
   exit 1
@@ -27,8 +26,11 @@ if [[ ! -f "${metadata_file}" ]]; then
   echo -e "\aError: metadata file \`${metadata_file}\` does not exist!"
   exit 1
 fi
+metadata_file=`realpath "${metadata_file}"`
 
-if [[ -z `head -n 1 "${metadata_file}" | grep 'SampleID'` ]]; then
+# Check if SampleID column is present in metadata file
+header=`head -n 1 "${metadata_file}"`
+if [[ -z `echo ",${header}," | grep ',SampleID,'` ]]; then
   echo -e "\aError: no \`SampleID\` column in metadata file detected!"
   exit 1
 fi
@@ -49,17 +51,6 @@ if [[ -z "${PREPROCESS16S}" ]]; then
 fi
 if [[ ! -f "${PREPROCESS16S}" ]]; then
   echo -e "\aError: cannot find preprocess16S.py executable at \`${PREPROCESS16S}\`!".
-  echo "Please, make sure that configurations in file \`${config_file}\` are correct."
-  exit 1
-fi
-
-if [[ -z "${FILTER_MERGE_CLASSIFY}" ]]; then
-  echo -e "\aError: path to filter-merge-classify.R is not specified in cofiguration file \`${config_file}\`"
-  echo 'Please, specify it.'
-  exit 1
-fi
-if [[ ! -f "${FILTER_MERGE_CLASSIFY}" ]]; then
-  echo -e "\aError: cannot find filter-merge-classify.R executable at \`${FILTER_MERGE_CLASSIFY}\`!".
   echo "Please, make sure that configurations in file \`${config_file}\` are correct."
   exit 1
 fi
@@ -116,6 +107,13 @@ if [[ $? != 0 ]]; then
   log_file='/dev/null'
 fi
 
+# Get and check "runner" script
+runner=`realpath ./src/preprocessing-runner.sh`
+if [[ ! -f "${runner}" ]]; then
+  echo -e "\aError: file \`preprocessing-runner.sh\` does not exist at \`${runner}\`!"
+  exit 1
+fi
+
 
 # Print some stuff
 echo "Starting preprocessing pipeline."
@@ -124,12 +122,11 @@ echo "Log file: \`${log_file}\`."
 echo "Metadata file: \`${metadata_file}\`."
 echo -e "Output directory: \`${outdir}\`\n"
 
-
 # Launch runner and write it's output to log file
-"${runner}" "${input_dir}" "${metadata_file}" "${outdir}" |& tee "${log_file}"
+bash "${runner}" "${input_dir}" "${metadata_file}" "${outdir}" |& tee "${log_file}"
 
 
-global_preprocess_log="${outdir}/preprocess16S_global.log"
+global_preprocess_log="${outdir}/without_primers/preprocess16S_global.log"
 if [[ -f "${global_preprocess_log}" ]]; then
   echo -e "\npreprocess16S logs go below:\n" >> "${log_file}"
   cat "${global_preprocess_log}" >> "${log_file}"
@@ -137,7 +134,7 @@ if [[ -f "${global_preprocess_log}" ]]; then
 else
   echo -e "\a\nWarning: cannot save logs from preprocess16S."
   echo "It's log file should be here: \`${global_preprocess_log}\`, but this file does not exist."
-  echo "It is not a fatal error, this log just won't be saved.\n"
+  echo "It is not a fatal error, this log just won't be saved."
 fi
 
 

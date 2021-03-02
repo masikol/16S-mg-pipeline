@@ -19,14 +19,17 @@ if (length(commandArgs(T)) != argsNum) {
 rm(argsNum)
 
 # == Store command line argument to variables ==
-# Get and check path to input dir
-wrkdir <- normalizePath(
+# Get and check path to input dir (it's directory with fastq files after preprocess16S)
+input.dir <- normalizePath(
   trimws(commandArgs(T)[1], which="right", whitespace = "/")
 )
-if (!dir.exists(wrkdir)) {
-  message(sprintf("Input directory does not exist: `%s`!", wrkdir))
+if (!dir.exists(input.dir)) {
+  message(sprintf("Input directory does not exist: `%s`!", input.dir))
   quit(save = "no", status = 1)
 }
+
+# Set workdir to parent  dir of input directory
+wrkdir <- dirname(input.dir)
 
 # Get and check path to metadata file
 metadata.fpath <- normalizePath(commandArgs(T)[2])
@@ -36,16 +39,11 @@ if (!file.exists(metadata.fpath)) {
 }
 
 # Print some stuff
-cat(sprintf("Input directory: `%s`.\n", wrkdir))
+cat(sprintf("Input directory: `%s`.\n", input.dir))
 cat(sprintf("Metadata file: `%s`.\n", metadata.fpath))
 
 # == Read metadata file ==
 metadata.df <- read.csv(metadata.fpath, header = TRUE)
-# Check if mandatory `SampleID` column is present
-# if (! "SampleID" %in% colnames(metadata.df)) {
-#   message("Error: no `SampleID` column in metadata file detected!")
-#   quit(save = "no", status = 1)
-# }
 rownames(metadata.df) <- metadata.df$SampleID
 
 # == Go to work dir ==
@@ -80,8 +78,8 @@ cat("Importing phangorn...\n")
 library("phangorn")
 
 # == Get and check read files ==
-fnFs <- sort(list.files(wrkdir, pattern="_R1.*.fastq.gz", full.names = TRUE))
-fnRs <- sort(list.files(wrkdir, pattern="_R2.*.fastq.gz", full.names = TRUE))
+fnFs <- sort(list.files(input.dir, pattern="_R1.*.fastq.gz", full.names = TRUE))
+fnRs <- sort(list.files(input.dir, pattern="_R2.*.fastq.gz", full.names = TRUE))
 sample.names <- sapply(strsplit(basename(fnFs), "_"), `[`, 1)
 
 if (length(fnFs) != length(fnRs)) {
@@ -94,10 +92,23 @@ if (length(fnFs) != length(fnRs)) {
   cat(sprintf("%d files of reverse reads detected.\n", length(fnRs)))
 }
 
+# Check if all samples have their fastq files
 if (!all(sample.names %in% metadata.df$SampleID)) {
-  message("Error: some fastq files of samples mentioned in metadata file are missing!\n")
+  message('\n----------')
+  message("Error: some samples have their fastq files but are not mentioned in metadata file!\n")
   message("Here are missing samples:\n")
-  message(sample.names[!sample.names %in% metadata.df$SampleID])
+  message(sample.names[ ! sample.names %in% metadata.df$SampleID])
+  message('----------')
+  quit(save = "no", status = 1)
+}
+
+# Check if all fasta files are mentioned in metadata file
+if (!all(metadata.df$SampleID %in% sample.names)) {
+  message('\n----------')
+  message("Error: some samples mentioned in metadata file have no input fastq files!\n")
+  message("Here are missing samples:\n")
+  message(metadata.df$SampleID[ ! metadata.df$SampleID %in% sample.names])
+  message('----------')
   quit(save = "no", status = 1)
 }
 
@@ -127,7 +138,7 @@ names(filtFs) <- sample.names
 names(filtRs) <- sample.names
 
 out <- filterAndTrim(fnFs, filtFs, fnRs, filtRs,
-                     maxN = 0, maxEE = c(3.0, 3.0), rm.phix = TRUE,
+                     maxN = 0, maxEE = c(2.0, 2.0), rm.phix = TRUE,
                      compress = TRUE, multithread = TRUE, verbose = TRUE)
 cat("Reads filtering is completed.\n")
 
@@ -236,9 +247,9 @@ write(asv_fasta, avs_fa_fpath)
 rm(avs_fa_fpath)
 
 # == Create and save count table ==
-avs_count_fpath <- file.path(outfiles.dir, "OTU_abundance_table.tsv")
+avs_count_fpath <- file.path(outfiles.dir, "ASV_abundance_table.tsv")
 cat("\n")
-cat(sprintf("Saving OTU abundance table to `%s`\n", avs_count_fpath))
+cat(sprintf("Saving ASV abundance table to `%s`\n", avs_count_fpath))
 asv_tab <- t(seqtab.nochim)
 row.names(asv_tab) <- sub(">", "", asv_headers)
 write.table(asv_tab, avs_count_fpath,
