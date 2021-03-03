@@ -138,7 +138,7 @@ names(filtFs) <- sample.names
 names(filtRs) <- sample.names
 
 out <- filterAndTrim(fnFs, filtFs, fnRs, filtRs,
-                     maxN = 0, maxEE = c(2.0, 2.0), rm.phix = TRUE,
+                     maxN = 0, maxEE = c(3.0, 3.0), rm.phix = TRUE,
                      compress = TRUE, multithread = TRUE, verbose = TRUE)
 cat("Reads filtering is completed.\n")
 
